@@ -2,6 +2,8 @@ import axios, { AxiosRequestConfig } from "axios";
 import fs from "fs";
 import FormData from "form-data";
 import * as dotEnv from "dotenv";
+import * as stream from "stream";
+import { promisify } from "util";
 
 dotEnv.config();
 
@@ -38,19 +40,20 @@ const main = async () => {
   form.append("input", input);
   form.append("protocol", "PLONK");
 
-  const headers = form.getHeaders();
-  const res = await axios.post<FormData, { data: ProofInfo }>(
-    `${API_BASE_URL}/proofs/create/circom`,
-    form,
-    {
-      headers: {
-        ...headers,
-        Authorization: `Bearer ${API_KEY}`,
-      },
-    },
-  );
+  // const headers = form.getHeaders();
+  // const res = await axios.post<FormData, { data: ProofInfo }>(
+  //   `${API_BASE_URL}/proofs/create/circom`,
+  //   form,
+  //   {
+  //     headers: {
+  //       ...headers,
+  //       Authorization: `Bearer ${API_KEY}`,
+  //     },
+  //   },
+  // );
 
-  const proofId = res.data.id;
+  // const proofId = res.data.id;
+  const proofId = "M8-zrTH0WqXVFoeYuDb9P";
   console.log("proofId", proofId);
 
   let waitProofCreation = true;
@@ -65,12 +68,13 @@ const main = async () => {
     );
 
     if (proofInfo.data.status === "COMPLETED" && proofInfo.data.proofFileUrl != null) {
-      const file = await axios.get<AxiosRequestConfig, { data: string }>(proofInfo.data.proofFileUrl);
-      fs.writeFileSync(
-        `${process.cwd()}/scripts/data/${circuitName}_proof.json`,
-        file.data,
-        "utf-8",
+      const writer = fs.createWriteStream(`${process.cwd()}/scripts/data/${circuitName}_proof.zip`);
+      const file = await axios.get<AxiosRequestConfig, { data: stream.Stream }>(
+        proofInfo.data.proofFileUrl,
+        { responseType: "stream" },
       );
+      file.data.pipe(writer);
+      await promisify(stream.finished)(writer);
       waitProofCreation = false;
     } else {
       await sleep(10);
